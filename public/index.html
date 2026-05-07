@@ -1,25 +1,136 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-    <title>HistoriAr</title>
+    <meta charset="UTF-8">
+    <title>HistoriAr - Mapa Interactivo</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        #map { height: 600px; width: 100%; }
+        /* Color de fondo y estilo general */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #e0eafc 0%, #cfdef3 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        h1 { color: #2c3e50; text-shadow: 1px 1px 2px rgba(0,0,0,0.1); margin-bottom: 25px; }
+
+        #map {
+            height: 500px;
+            width: 100%;
+            max-width: 1000px;
+            border: 4px solid white;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+
+        #info-panel {
+            margin-top: 30px;
+            width: 100%;
+            max-width: 900px;
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+            display: none;
+            text-align: left; /* Texto alineado a la izquierda para que se lea mejor */
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        #info-titulo { color: #2980b9; border-bottom: 2px solid #eee; padding-bottom: 10px; text-align: center; }
+
+        #info-img {
+            width: 100%;
+            height: 400px;
+            object-fit: cover;
+            border-radius: 10px;
+            margin: 20px 0;
+            border: 1px solid #ddd;
+        }
+
+        #info-desc {
+            line-height: 1.6;
+            color: #444;
+            font-size: 1.1em;
+            white-space: pre-wrap; /* Esto permite ver los dos párrafos correctamente */
+        }
+
+        .btn-fav {
+            background-color: #f1c40f;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1em;
+            margin: 20px auto;
+            display: block;
+            transition: transform 0.2s, background 0.2s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .btn-fav:hover { background-color: #d4ac0d; transform: scale(1.05); }
     </style>
 </head>
 <body>
-<h1>Mapa Histórico Argentino 🇦🇷</h1>
+
+<h1>Mapa Histórico Argentino AR</h1>
 <div id="map"></div>
+
+<div id="info-panel">
+    <h2 id="info-titulo"></h2>
+    <img id="info-img" src="" alt="Imagen del hito">
+    <p id="info-desc"></p>
+    <button class="btn-fav" id="btn-guardar">⭐ Guardar en mis favoritos</button>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    // Esto inicializa el mapa usando la API externa
     var map = L.map('map').setView([-34.6037, -58.3816], 4);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-    // Ponemos un marcador simple
-    L.marker([-34.6083, -58.3712]).addTo(map)
-        .bindPopup('<b>Cabildo de Bs As</b><br>Hito de 1810.')
-        .openPopup();
+    async function cargarHitos() {
+        try {
+            const respuesta = await fetch('/hitos');
+            const datos = await respuesta.json();
+
+            datos.forEach(hito => {
+                const marker = L.marker([hito.lat, hito.lng]).addTo(map);
+
+                marker.on('click', () => {
+                    document.getElementById('info-panel').style.display = 'block';
+                    document.getElementById('info-titulo').innerText = hito.titulo;
+                    document.getElementById('info-desc').innerText = hito.desc;
+                    document.getElementById('info-img').src = hito.imagen;
+
+                    document.getElementById('btn-guardar').onclick = () => guardarFavorito(hito.id, hito.titulo);
+
+                    // Scroll automático hacia la información
+                    setTimeout(() => {
+                        document.getElementById('info-panel').scrollIntoView({ behavior: 'smooth' });
+                    }, 100);
+                });
+            });
+        } catch (e) { console.error(e); }
+    }
+
+    async function guardarFavorito(id, titulo) {
+        const respuesta = await fetch('/guardar-favorito', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id_hito: id })
+        });
+        const resultado = await respuesta.json();
+        alert(`¡Éxito! Has guardado "${titulo}" en tus favoritos.`);
+    }
+
+    cargarHitos();
 </script>
 </body>
 </html>
