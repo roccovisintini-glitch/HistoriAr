@@ -2,135 +2,775 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>HistoriAr - Mapa Interactivo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HistoriAr — Descubrí Argentina</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        /* Color de fondo y estilo general */
+        :root {
+            --celeste: #74B9E0;
+            --celeste-oscuro: #3a8fc7;
+            --celeste-claro: #dff0fc;
+            --dorado: #D4A017;
+            --dorado-claro: #fdf3d7;
+            --verde: #2d7a4f;
+            --texto: #1a1a2e;
+            --texto-suave: #4a4a6a;
+            --fondo: #f5f0e8;
+            --blanco: #ffffff;
+            --sombra: 0 8px 32px rgba(26,26,46,0.10);
+            --radio: 16px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background: linear-gradient(135deg, #e0eafc 0%, #cfdef3 100%);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            font-family: 'DM Sans', sans-serif;
+            background: var(--fondo);
+            color: var(--texto);
             min-height: 100vh;
         }
 
-        h1 { color: #2c3e50; text-shadow: 1px 1px 2px rgba(0,0,0,0.1); margin-bottom: 25px; }
+        #pantalla-auth {
+            min-height: 100vh;
+            background: var(--texto);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .auth-card {
+            background: var(--blanco);
+            border-radius: 24px;
+            padding: 48px 40px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 24px 64px rgba(0,0,0,0.3);
+        }
+
+        .auth-logo {
+            font-family: 'Playfair Display', serif;
+            font-size: 2rem;
+            font-weight: 900;
+            text-align: center;
+            margin-bottom: 6px;
+            color: var(--texto);
+        }
+
+        .auth-logo span { color: var(--celeste-oscuro); }
+
+        .auth-subtitulo {
+            text-align: center;
+            color: var(--texto-suave);
+            font-size: 0.9rem;
+            margin-bottom: 32px;
+        }
+
+        .auth-tabs {
+            display: flex;
+            background: var(--fondo);
+            border-radius: 10px;
+            padding: 4px;
+            margin-bottom: 28px;
+        }
+
+        .auth-tab {
+            flex: 1;
+            padding: 9px;
+            border: none;
+            background: transparent;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.9rem;
+            color: var(--texto-suave);
+            transition: all 0.2s;
+        }
+
+        .auth-tab.activo {
+            background: var(--blanco);
+            color: var(--texto);
+            font-weight: 500;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .auth-campo { margin-bottom: 16px; }
+
+        .auth-campo label {
+            display: block;
+            font-size: 0.82rem;
+            font-weight: 500;
+            color: var(--texto-suave);
+            margin-bottom: 6px;
+        }
+
+        .auth-campo input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1.5px solid #e0e0e0;
+            border-radius: 10px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.95rem;
+            color: var(--texto);
+            transition: border-color 0.2s;
+            outline: none;
+        }
+
+        .auth-campo input:focus { border-color: var(--celeste-oscuro); }
+
+        .auth-error {
+            background: #fff0f0;
+            border-left: 3px solid #e74c3c;
+            color: #c0392b;
+            font-size: 0.85rem;
+            padding: 10px 14px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        .btn-auth {
+            width: 100%;
+            padding: 14px;
+            background: var(--texto);
+            color: var(--blanco);
+            border: none;
+            border-radius: 10px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            margin-top: 4px;
+        }
+
+        .btn-auth:hover { opacity: 0.85; }
+
+        #app { display: none; }
+
+        header {
+            background: var(--texto);
+            color: var(--blanco);
+            padding: 0 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 72px;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .logo { font-family: 'Playfair Display', serif; font-size: 1.7rem; font-weight: 900; }
+        .logo span { color: var(--celeste); }
+
+        .header-right { display: flex; align-items: center; gap: 14px; }
+
+        .header-usuario { font-size: 0.88rem; color: rgba(255,255,255,0.6); }
+        .header-usuario strong { color: var(--blanco); }
+
+        .btn-logout {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: rgba(255,255,255,0.7);
+            padding: 6px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.82rem;
+            transition: all 0.2s;
+        }
+
+        .btn-logout:hover { background: rgba(255,255,255,0.15); color: var(--blanco); }
+
+        .hero {
+            background: var(--texto);
+            color: var(--blanco);
+            padding: 56px 40px 48px;
+            text-align: center;
+        }
+
+        .hero h1 {
+            font-family: 'Playfair Display', serif;
+            font-size: clamp(2rem, 5vw, 3.4rem);
+            font-weight: 900;
+            line-height: 1.15;
+            max-width: 700px;
+            margin: 0 auto 16px;
+        }
+
+        .hero h1 em { font-style: normal; color: var(--celeste); }
+
+        .hero p {
+            font-size: 1.05rem;
+            color: rgba(255,255,255,0.65);
+            max-width: 520px;
+            margin: 0 auto 32px;
+            font-weight: 300;
+            line-height: 1.6;
+        }
+
+        .filtros { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+        .filtro-btn {
+            background: rgba(255,255,255,0.08);
+            border: 1.5px solid rgba(255,255,255,0.2);
+            color: var(--blanco);
+            padding: 9px 20px;
+            border-radius: 40px;
+            cursor: pointer;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.88rem;
+            transition: all 0.2s;
+        }
+
+        .filtro-btn:hover, .filtro-btn.activo {
+            background: var(--celeste);
+            border-color: var(--celeste);
+            color: var(--texto);
+            font-weight: 500;
+        }
+
+        .mapa-container { padding: 40px; max-width: 1200px; margin: 0 auto; }
+
+        .seccion-titulo {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.4rem;
+            font-weight: 700;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .seccion-titulo::after {
+            content: '';
+            flex: 1;
+            height: 1.5px;
+            background: linear-gradient(to right, #ddd, transparent);
+        }
 
         #map {
-            height: 500px;
+            height: 480px;
             width: 100%;
-            max-width: 1000px;
-            border: 4px solid white;
-            border-radius: 15px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            border-radius: var(--radio);
+            box-shadow: var(--sombra);
+            border: 3px solid var(--blanco);
         }
 
-        #info-panel {
-            margin-top: 30px;
-            width: 100%;
-            max-width: 900px;
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
-            display: none;
-            text-align: left; /* Texto alineado a la izquierda para que se lea mejor */
-            animation: fadeIn 0.5s ease-in;
+        #info-panel { max-width: 1200px; margin: 0 auto 40px; padding: 0 40px; display: none; }
+
+        .panel-card {
+            background: var(--blanco);
+            border-radius: var(--radio);
+            box-shadow: var(--sombra);
+            overflow: hidden;
+            animation: subirFadeIn 0.4s ease-out;
         }
 
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes subirFadeIn {
+            from { opacity: 0; transform: translateY(24px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
 
-        #info-titulo { color: #2980b9; border-bottom: 2px solid #eee; padding-bottom: 10px; text-align: center; }
+        .panel-img-wrap { position: relative; height: 340px; overflow: hidden; }
 
-        #info-img {
-            width: 100%;
-            height: 400px;
+        .panel-img-wrap img {
+            width: 100%; height: 100%;
             object-fit: cover;
-            border-radius: 10px;
-            margin: 20px 0;
-            border: 1px solid #ddd;
+            transition: transform 0.6s ease;
         }
 
-        #info-desc {
-            line-height: 1.6;
-            color: #444;
-            font-size: 1.1em;
-            white-space: pre-wrap; /* Esto permite ver los dos párrafos correctamente */
+        .panel-card:hover .panel-img-wrap img { transform: scale(1.03); }
+
+        .panel-img-overlay {
+            position: absolute; inset: 0;
+            background: linear-gradient(to top, rgba(26,26,46,0.85) 0%, transparent 55%);
         }
+
+        .panel-img-titulo { position: absolute; bottom: 24px; left: 28px; right: 28px; }
+
+        .panel-img-titulo h2 {
+            font-family: 'Playfair Display', serif;
+            font-size: clamp(1.4rem, 3vw, 2rem);
+            font-weight: 700;
+            color: var(--blanco);
+            line-height: 1.2;
+        }
+
+        .panel-badge {
+            display: inline-block;
+            font-size: 0.72rem;
+            font-weight: 500;
+            padding: 4px 12px;
+            border-radius: 20px;
+            margin-bottom: 8px;
+            color: var(--texto);
+        }
+
+        .panel-body { padding: 28px; }
+        .panel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+
+        .panel-desc {
+            font-size: 0.97rem;
+            line-height: 1.75;
+            color: var(--texto-suave);
+            white-space: pre-wrap;
+        }
+
+        .panel-lateral { display: flex; flex-direction: column; gap: 16px; }
+
+        .info-box { border-radius: 12px; padding: 16px 18px; }
+        .info-box.dato { background: var(--celeste-claro); border-left: 4px solid var(--celeste-oscuro); }
+        .info-box.chicos { background: var(--dorado-claro); border-left: 4px solid var(--dorado); }
+
+        .info-box-label {
+            font-size: 0.7rem;
+            font-weight: 500;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+
+        .info-box.dato .info-box-label { color: var(--celeste-oscuro); }
+        .info-box.chicos .info-box-label { color: #8a6500; }
+        .info-box p { font-size: 0.92rem; line-height: 1.6; color: var(--texto); }
+
+        .panel-actions { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
 
         .btn-fav {
-            background-color: #f1c40f;
+            background: var(--dorado);
+            color: var(--texto);
             border: none;
-            padding: 15px 30px;
-            border-radius: 30px;
+            padding: 12px 24px;
+            border-radius: 40px;
             cursor: pointer;
-            font-weight: bold;
-            font-size: 1em;
-            margin: 20px auto;
-            display: block;
-            transition: transform 0.2s, background 0.2s;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.92rem;
+            font-weight: 500;
+            transition: all 0.2s;
         }
 
-        .btn-fav:hover { background-color: #d4ac0d; transform: scale(1.05); }
+        .btn-fav:hover { background: #b8891a; transform: translateY(-1px); }
+        .btn-fav.guardado { background: #e8f5e9; color: var(--verde); }
+
+        .btn-cerrar {
+            background: transparent;
+            color: var(--texto-suave);
+            border: 1.5px solid #ddd;
+            padding: 12px 24px;
+            border-radius: 40px;
+            cursor: pointer;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.92rem;
+            transition: all 0.2s;
+        }
+
+        .btn-cerrar:hover { border-color: #aaa; color: var(--texto); }
+
+        #toast {
+            position: fixed;
+            bottom: 32px; right: 32px;
+            background: var(--texto);
+            color: var(--blanco);
+            padding: 14px 22px;
+            border-radius: 12px;
+            font-size: 0.92rem;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+            transform: translateY(80px);
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            z-index: 9999;
+            max-width: 320px;
+        }
+
+        #toast.visible { transform: translateY(0); opacity: 1; }
+        #toast.exito { border-left: 4px solid var(--celeste); }
+        #toast.info  { border-left: 4px solid var(--dorado); }
+
+        #favoritos-panel { max-width: 1200px; margin: 0 auto; padding: 0 40px 60px; }
+
+        #favoritos-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .fav-card {
+            background: var(--blanco);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .fav-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,0.13); }
+        .fav-card img { width: 100%; height: 130px; object-fit: cover; }
+        .fav-card-body { padding: 12px 14px; }
+
+        .fav-card-titulo {
+            font-family: 'Playfair Display', serif;
+            font-size: 0.97rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .fav-card-provincia { font-size: 0.78rem; color: var(--texto-suave); }
+        .fav-vacio { color: var(--texto-suave); font-size: 0.95rem; padding: 20px 0; }
+
+        footer {
+            background: var(--texto);
+            color: rgba(255,255,255,0.4);
+            text-align: center;
+            padding: 24px 40px;
+            font-size: 0.82rem;
+        }
+
+        footer strong { color: rgba(255,255,255,0.7); }
+
+        @media (max-width: 680px) {
+            .panel-grid { grid-template-columns: 1fr; }
+            header { padding: 0 20px; }
+            .hero { padding: 36px 20px 32px; }
+            .mapa-container, #info-panel, #favoritos-panel { padding: 20px; }
+        }
     </style>
 </head>
 <body>
 
-<h1>Mapa Histórico Argentino AR</h1>
-<div id="map"></div>
-
-<div id="info-panel">
-    <h2 id="info-titulo"></h2>
-    <img id="info-img" src="" alt="Imagen del hito">
-    <p id="info-desc"></p>
-    <button class="btn-fav" id="btn-guardar">⭐ Guardar en mis favoritos</button>
+<!-- LOGIN -->
+<div id="pantalla-auth">
+    <div class="auth-card">
+        <div class="auth-logo">Histori<span>Ar</span></div>
+        <p class="auth-subtitulo">🇦🇷 Descubrí Argentina</p>
+        <div class="auth-tabs">
+            <button class="auth-tab activo" id="tab-login" onclick="mostrarTab('login')">Iniciar sesión</button>
+            <button class="auth-tab" id="tab-registro" onclick="mostrarTab('registro')">Registrarse</button>
+        </div>
+        <div id="auth-error" class="auth-error"></div>
+        <div id="form-login">
+            <div class="auth-campo">
+                <label>Usuario</label>
+                <input type="text" id="login-usuario" placeholder="Tu nombre de usuario" autocomplete="username">
+            </div>
+            <div class="auth-campo">
+                <label>Contraseña</label>
+                <input type="password" id="login-password" placeholder="••••••" autocomplete="current-password">
+            </div>
+            <button class="btn-auth" onclick="hacerLogin()">Entrar →</button>
+        </div>
+        <div id="form-registro" style="display:none">
+            <div class="auth-campo">
+                <label>Elegí un usuario</label>
+                <input type="text" id="reg-usuario" placeholder="Ej: rocco123" autocomplete="username">
+            </div>
+            <div class="auth-campo">
+                <label>Contraseña (mínimo 4 caracteres)</label>
+                <input type="password" id="reg-password" placeholder="••••••" autocomplete="new-password">
+            </div>
+            <button class="btn-auth" onclick="hacerRegistro()">Crear cuenta →</button>
+        </div>
+    </div>
 </div>
+
+<!-- APP -->
+<div id="app">
+    <header>
+        <div class="logo">Histori<span>Ar</span></div>
+        <div class="header-right">
+            <span class="header-usuario">Hola, <strong id="nombre-usuario"></strong></span>
+            <button class="btn-logout" onclick="cerrarSesion()">Salir</button>
+        </div>
+    </header>
+
+    <section class="hero">
+        <h1>El mapa interactivo de <em>nuestra historia</em> y geografía</h1>
+        <p>Hacé clic en cualquier punto del mapa para conocer los lugares más importantes de Argentina.</p>
+        <div class="filtros">
+            <button class="filtro-btn activo" data-filtro="todos">🗺️ Todos</button>
+            <button class="filtro-btn" data-filtro="historico">🏛️ Históricos</button>
+            <button class="filtro-btn" data-filtro="turistico">🌄 Turísticos</button>
+        </div>
+    </section>
+
+    <section class="mapa-container">
+        <div class="seccion-titulo">Mapa interactivo</div>
+        <div id="map"></div>
+    </section>
+
+    <section id="info-panel">
+        <div class="panel-card">
+            <div class="panel-img-wrap">
+                <img id="info-img" src="" alt="">
+                <div class="panel-img-overlay"></div>
+                <div class="panel-img-titulo">
+                    <div class="panel-badge" id="info-badge"></div>
+                    <h2 id="info-titulo"></h2>
+                </div>
+            </div>
+            <div class="panel-body">
+                <div class="panel-grid">
+                    <div>
+                        <p class="panel-desc" id="info-desc"></p>
+                        <div class="panel-actions">
+                            <button class="btn-fav" id="btn-guardar">⭐ Guardar en favoritos</button>
+                            <button class="btn-cerrar" id="btn-cerrar">✕ Cerrar</button>
+                        </div>
+                    </div>
+                    <div class="panel-lateral">
+                        <div class="info-box dato">
+                            <div class="info-box-label">📌 Dato clave</div>
+                            <p id="info-dato"></p>
+                        </div>
+                        <div class="info-box chicos">
+                            <div class="info-box-label">🎒 Para estudiantes</div>
+                            <p id="info-chicos"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="favoritos-panel">
+        <div class="seccion-titulo">Mis favoritos</div>
+        <div id="favoritos-grid">
+            <p class="fav-vacio">Guardá lugares para verlos acá ⭐</p>
+        </div>
+    </section>
+
+    <footer>
+        Hecho con 💙 por <strong>Rocco</strong> — Proyecto escolar HistoriAr &nbsp;·&nbsp; Express + SQLite + Leaflet
+    </footer>
+</div>
+
+<div id="toast"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    var map = L.map('map').setView([-34.6037, -58.3816], 4);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    let usuarioActual = localStorage.getItem('historiar_usuario');
+    let todosLosHitos = [];
+    let hitoActual    = null;
+    let marcadores    = [];
+    let mapaIniciado  = false;
+    let map;
+    let favoritosLocales = new Set(JSON.parse(localStorage.getItem('historiar_favs') || '[]'));
+
+    // ── TABS ──
+    function mostrarTab(tab) {
+        document.getElementById('form-login').style.display    = tab === 'login'    ? 'block' : 'none';
+        document.getElementById('form-registro').style.display = tab === 'registro' ? 'block' : 'none';
+        document.getElementById('tab-login').className    = 'auth-tab' + (tab === 'login'    ? ' activo' : '');
+        document.getElementById('tab-registro').className = 'auth-tab' + (tab === 'registro' ? ' activo' : '');
+        ocultarError();
+    }
+
+    function mostrarError(msg) {
+        const el = document.getElementById('auth-error');
+        el.textContent = msg;
+        el.style.display = 'block';
+    }
+
+    function ocultarError() {
+        document.getElementById('auth-error').style.display = 'none';
+    }
+
+    // ── LOGIN / REGISTRO ──
+    async function hacerLogin() {
+        const usuario  = document.getElementById('login-usuario').value.trim();
+        const password = document.getElementById('login-password').value;
+        if (!usuario || !password) return mostrarError('Completá todos los campos.');
+        const res  = await fetch('/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ usuario, password })
+        });
+        const data = await res.json();
+        if (!res.ok) return mostrarError(data.error);
+        iniciarSesion(data.usuario);
+    }
+
+    async function hacerRegistro() {
+        const usuario  = document.getElementById('reg-usuario').value.trim();
+        const password = document.getElementById('reg-password').value;
+        if (!usuario || !password) return mostrarError('Completá todos los campos.');
+        const res  = await fetch('/registro', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ usuario, password })
+        });
+        const data = await res.json();
+        if (!res.ok) return mostrarError(data.error);
+        iniciarSesion(data.usuario);
+    }
+
+    function iniciarSesion(usuario) {
+        usuarioActual = usuario;
+        localStorage.setItem('historiar_usuario', usuario);
+        document.getElementById('pantalla-auth').style.display = 'none';
+        document.getElementById('app').style.display = 'block';
+        document.getElementById('nombre-usuario').textContent = usuario;
+        inicializarMapa();
+        cargarHitos();
+    }
+
+    function cerrarSesion() {
+        localStorage.removeItem('historiar_usuario');
+        localStorage.removeItem('historiar_favs');
+        location.reload();
+    }
+
+    // Enter en inputs
+    document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') hacerLogin(); });
+    document.getElementById('reg-password').addEventListener('keydown',   e => { if (e.key === 'Enter') hacerRegistro(); });
+
+    // Auto-login si ya estaba logueado
+    if (usuarioActual) iniciarSesion(usuarioActual);
+
+    // ── MAPA ──
+    function inicializarMapa() {
+        if (mapaIniciado) return;
+        mapaIniciado = true;
+        map = L.map('map').setView([-38.5, -63.5], 4);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
+            maxZoom: 18
+        }).addTo(map);
+    }
+
+    function crearIcono(tipo) {
+        const color = tipo === 'historico' ? '#74B9E0' : '#D4A017';
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="40" viewBox="0 0 32 40">
+            <path d="M16 0C7.163 0 0 7.163 0 16c0 10 16 24 16 24S32 26 32 16C32 7.163 24.837 0 16 0z" fill="#1a1a2e"/>
+            <circle cx="16" cy="16" r="8" fill="${color}"/>
+        </svg>`;
+        return L.divIcon({ html: svg, className: '', iconSize: [32,40], iconAnchor: [16,40] });
+    }
 
     async function cargarHitos() {
         try {
-            const respuesta = await fetch('/hitos');
-            const datos = await respuesta.json();
-
-            datos.forEach(hito => {
-                const marker = L.marker([hito.lat, hito.lng]).addTo(map);
-
-                marker.on('click', () => {
-                    document.getElementById('info-panel').style.display = 'block';
-                    document.getElementById('info-titulo').innerText = hito.titulo;
-                    document.getElementById('info-desc').innerText = hito.desc;
-                    document.getElementById('info-img').src = hito.imagen;
-
-                    document.getElementById('btn-guardar').onclick = () => guardarFavorito(hito.id, hito.titulo);
-
-                    // Scroll automático hacia la información
-                    setTimeout(() => {
-                        document.getElementById('info-panel').scrollIntoView({ behavior: 'smooth' });
-                    }, 100);
-                });
-            });
-        } catch (e) { console.error(e); }
+            const res = await fetch('/hitos');
+            todosLosHitos = await res.json();
+            renderizarMarcadores(todosLosHitos);
+            actualizarFavoritos();
+        } catch (e) {
+            mostrarToast('No se pudieron cargar los hitos.', 'info');
+        }
     }
 
-    async function guardarFavorito(id, titulo) {
-        const respuesta = await fetch('/guardar-favorito', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id_hito: id })
+    function renderizarMarcadores(hitos) {
+        marcadores.forEach(m => map.removeLayer(m));
+        marcadores = [];
+        hitos.forEach(hito => {
+            const m = L.marker([hito.lat, hito.lng], { icon: crearIcono(hito.tipo) })
+                .addTo(map)
+                .bindTooltip(hito.titulo, { direction: 'top', offset: [0, -36] });
+            m.on('click', () => abrirPanel(hito));
+            marcadores.push(m);
         });
-        const resultado = await respuesta.json();
-        alert(`¡Éxito! Has guardado "${titulo}" en tus favoritos.`);
     }
 
-    cargarHitos();
+    function abrirPanel(hito) {
+        hitoActual = hito;
+        document.getElementById('info-img').src            = hito.imagen;
+        document.getElementById('info-titulo').textContent = hito.titulo;
+        document.getElementById('info-desc').textContent   = hito.desc;
+        document.getElementById('info-dato').textContent   = hito.dato_clave;
+        document.getElementById('info-chicos').textContent = hito.para_chicos;
+        const badge = document.getElementById('info-badge');
+        badge.textContent      = hito.tipo === 'historico' ? '🏛️ ' + hito.categoria : '🌄 ' + hito.categoria;
+        badge.style.background = hito.tipo === 'historico' ? '#74B9E0' : '#D4A017';
+        actualizarBtnFav();
+        const panel = document.getElementById('info-panel');
+        panel.style.display = 'block';
+        setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+    }
+
+    function actualizarBtnFav() {
+        if (!hitoActual) return;
+        const btn = document.getElementById('btn-guardar');
+        if (favoritosLocales.has(String(hitoActual.id))) {
+            btn.textContent = '✅ En favoritos';
+            btn.className   = 'btn-fav guardado';
+        } else {
+            btn.textContent = '⭐ Guardar en favoritos';
+            btn.className   = 'btn-fav';
+        }
+    }
+
+    document.getElementById('btn-cerrar').addEventListener('click', () => {
+        document.getElementById('info-panel').style.display = 'none';
+        hitoActual = null;
+    });
+
+    document.getElementById('btn-guardar').addEventListener('click', async () => {
+        if (!hitoActual) return;
+        try {
+            const res  = await fetch('/guardar-favorito', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id_hito: hitoActual.id, id_usuario: usuarioActual })
+            });
+            const data = await res.json();
+            if (data.yaExistia) {
+                mostrarToast('Ya está en tus favoritos.', 'info');
+            } else {
+                favoritosLocales.add(String(hitoActual.id));
+                localStorage.setItem('historiar_favs', JSON.stringify([...favoritosLocales]));
+                mostrarToast('¡Guardado! "' + hitoActual.titulo + '" en tus favoritos.', 'exito');
+                actualizarBtnFav();
+                actualizarFavoritos();
+            }
+        } catch (e) {
+            mostrarToast('Error al guardar.', 'info');
+        }
+    });
+
+    document.querySelectorAll('.filtro-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.filtro-btn').forEach(b => b.classList.remove('activo'));
+            btn.classList.add('activo');
+            const filtro    = btn.dataset.filtro;
+            const filtrados = filtro === 'todos' ? todosLosHitos : todosLosHitos.filter(h => h.tipo === filtro);
+            renderizarMarcadores(filtrados);
+            if (hitoActual && filtro !== 'todos' && hitoActual.tipo !== filtro) {
+                document.getElementById('info-panel').style.display = 'none';
+                hitoActual = null;
+            }
+        });
+    });
+
+    function actualizarFavoritos() {
+        const grid     = document.getElementById('favoritos-grid');
+        const favHitos = todosLosHitos.filter(h => favoritosLocales.has(String(h.id)));
+        if (favHitos.length === 0) {
+            grid.innerHTML = '<p class="fav-vacio">Guardá lugares para verlos acá ⭐</p>';
+            return;
+        }
+        grid.innerHTML = favHitos.map(h => `
+            <div class="fav-card" onclick='abrirPanel(${JSON.stringify(h)})'>
+                <img src="${h.imagen}" alt="${h.titulo}" loading="lazy">
+                <div class="fav-card-body">
+                    <div class="fav-card-titulo">${h.titulo}</div>
+                    <div class="fav-card-provincia">📍 ${h.provincia}</div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    let toastTimer;
+    function mostrarToast(mensaje, tipo = 'exito') {
+        const toast = document.getElementById('toast');
+        toast.textContent = mensaje;
+        toast.className   = 'visible ' + tipo;
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { toast.className = ''; }, 3500);
+    }
 </script>
 </body>
 </html>
