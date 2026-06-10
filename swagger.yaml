@@ -1,0 +1,130 @@
+openapi: 3.0.0
+info:
+  title: HistoriAr API
+  description: Documentación oficial de la API para el mapa interactivo HistoriAr.
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000
+    description: Servidor local de desarrollo
+
+# ─── DEFINICIÓN DE LAS VENTANILLAS (ENDPOINTS) ───
+paths:
+  /registro:
+    post:
+      summary: Registra un nuevo usuario en la base de datos.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                usuario:
+                  type: string
+                  example: "rocco123"
+                password:
+                  type: string
+                  example: "12345"
+      responses:
+        '200':
+          description: Registro exitoso. Devuelve el Token JWT.
+        '400':
+          description: Datos incompletos.
+        '409':
+          description: El usuario ya existe.
+
+  /login:
+    post:
+      summary: Inicia sesión validando credenciales.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                usuario:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login exitoso. Devuelve el Token JWT.
+        '401':
+          description: Usuario o contraseña incorrectos.
+
+  /api/hitos:
+    get:
+      summary: Obtiene la lista completa de hitos del mapa.
+      parameters:
+        - in: query
+          name: tipo
+          schema:
+            type: string
+          description: Filtro opcional por categoría (historico o turistico).
+      responses:
+        '200':
+          description: Devuelve un JSON estructurado con el estado, total y datos.
+
+  /api/detalle/{wiki_titulo}:
+    get:
+      summary: Consulta a la API externa de Wikipedia.
+      parameters:
+        - in: path
+          name: wiki_titulo
+          required: true
+          schema:
+            type: string
+          description: Título exacto del artículo en Wikipedia.
+      responses:
+        '200':
+          description: Devuelve la descripción en texto y la URL de la imagen en Alta Definición.
+        '404':
+          description: Información no encontrada en Wikipedia.
+
+  /guardar-favorito:
+    post:
+      summary: Guarda un hito en la lista de favoritos del usuario.
+      security:
+        - bearerAuth: []  # <-- ACÁ EXIGIMOS EL TOKEN JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id_hito:
+                  type: string
+                  example: "h1"
+      responses:
+        '200':
+          description: Hito guardado correctamente.
+        '403':
+          description: Acceso denegado. No hay token.
+
+  /favoritos:
+    delete:
+      summary: Elimina un hito de la lista de favoritos.
+      security:
+        - bearerAuth: []  # <-- ACÁ EXIGIMOS EL TOKEN JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id_hito:
+                  type: string
+      responses:
+        '200':
+          description: Hito eliminado de favoritos correctamente.
+
+# ─── CONFIGURACIÓN DE SEGURIDAD JWT ───
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
