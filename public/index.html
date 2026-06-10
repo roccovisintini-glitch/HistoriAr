@@ -519,6 +519,7 @@
                         <p class="panel-desc" id="info-desc"></p>
                         <div class="panel-actions">
                             <button class="btn-fav" id="btn-guardar">⭐ Guardar en favoritos</button>
+                            <a id="btn-wiki-link" href="#" target="_blank" class="btn-cerrar" style="text-decoration: none; background: #e0f2fe; color: #0369a1; border-color: #bae6fd;">📖 Leer más en Wikipedia</a>
                             <button class="btn-cerrar" id="btn-cerrar">✕ Cerrar</button>
                         </div>
                     </div>
@@ -654,10 +655,19 @@
 
     async function cargarHitos() {
         try {
-            const res = await fetch('/hitos');
-            todosLosHitos = await res.json();
-            renderizarMarcadores(todosLosHitos);
-            actualizarFavoritos();
+            // 1. Ahora apuntamos a la ruta correcta con "api"
+            const res = await fetch('/api/hitos');
+            const respuestaServidor = await res.json();
+
+            // 2. Verificamos que el backend haya respondido con éxito
+            if (respuestaServidor.status === "success") {
+                // 3. Sacamos el array de hitos de la propiedad "data"
+                todosLosHitos = respuestaServidor.data;
+                renderizarMarcadores(todosLosHitos);
+                actualizarFavoritos();
+            } else {
+                mostrarToast('Error al procesar los datos del servidor.', 'info');
+            }
         } catch (e) {
             mostrarToast('No se pudieron cargar los hitos.', 'info');
         }
@@ -675,27 +685,63 @@
         });
     }
 
-    function abrirPanel(hito) {
+    async function abrirPanel(hito) {
         hitoActual = hito;
-        document.getElementById('info-img').src            = hito.imagen;
+
+        // 1. Mostrar la info básica que sí tenemos localmente
         document.getElementById('info-titulo').textContent = hito.titulo;
-        document.getElementById('info-desc').textContent   = hito.desc;
         document.getElementById('info-dato').textContent   = hito.dato_clave;
         document.getElementById('info-chicos').textContent = hito.para_chicos;
+
+        // 2. Estados de carga mientras esperamos a Wikipedia
+        document.getElementById('info-desc').textContent   = "Cargando reseña histórica desde Wikipedia...";
+        document.getElementById('info-img').src            = "https://via.placeholder.com/600x340.png?text=Cargando+Imagen...";
+        document.getElementById('btn-wiki-link').style.display = 'none'; // Ocultamos el botón temporalmente
+
         const badge = document.getElementById('info-badge');
         badge.textContent      = hito.tipo === 'historico' ? '🏛️ ' + hito.categoria : '🌄 ' + hito.categoria;
         badge.style.background = hito.tipo === 'historico' ? '#74B9E0' : '#D4A017';
+
         actualizarBtnFav();
+
         const panel = document.getElementById('info-panel');
         panel.style.display = 'block';
         setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+
+        // 3. CONSULTA A WIKIPEDIA (A través de tu Backend)
+        try {
+            const res = await fetch(`/api/detalle/${hito.wiki_titulo}`);
+            const data = await res.json();
+
+            if (data.exito) {
+                // Actualizar la descripción con el texto real
+                document.getElementById('info-desc').textContent = data.descripcion;
+
+                // Mostramos el botón y le asignamos la URL que vino del backend
+                const btnWiki = document.getElementById('btn-wiki-link');
+                btnWiki.href = data.wiki_url;
+                btnWiki.style.display = 'inline-block';
+
+                // Actualizar la foto si Wikipedia tiene una
+                if (data.imagen) {
+                    document.getElementById('info-img').src = data.imagen;
+                } else {
+                    document.getElementById('info-img').src = "https://via.placeholder.com/600x340.png?text=Sin+imagen+disponible";
+                }
+            } else {
+                document.getElementById('info-desc').textContent = "No se pudo obtener información ampliada de Wikipedia.";
+            }
+        } catch (error) {
+            console.error("Error al buscar detalle:", error);
+            document.getElementById('info-desc').textContent = "Error de conexión al cargar la historia.";
+        }
     }
 
     function actualizarBtnFav() {
         if (!hitoActual) return;
         const btn = document.getElementById('btn-guardar');
         if (favoritosLocales.has(String(hitoActual.id))) {
-            btn.textContent = '✅ En favoritos';
+            btn.textContent = '❌ Quitar de favoritos';
             btn.className   = 'btn-fav guardado';
         } else {
             btn.textContent = '⭐ Guardar en favoritos';
@@ -710,24 +756,51 @@
 
     document.getElementById('btn-guardar').addEventListener('click', async () => {
         if (!hitoActual) return;
-        try {
-            const res  = await fetch('/guardar-favorito', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id_hito: hitoActual.id, id_usuario: usuarioActual })
-            });
-            const data = await res.json();
-            if (data.yaExistia) {
-                mostrarToast('Ya está en tus favoritos.', 'info');
-            } else {
-                favoritosLocales.add(String(hitoActual.id));
-                localStorage.setItem('historiar_favs', JSON.stringify([...favoritosLocales]));
-                mostrarToast('¡Guardado! "' + hitoActual.titulo + '" en tus favoritos.', 'exito');
-                actualizarBtnFav();
-                actualizarFavoritos();
+
+        const esFavorito = favoritosLocales.has(String(hitoActual.id));
+
+        if (esFavorito) {
+            // ─── ELIMINAR DE FAVORITOS ───
+            try {
+                const res = await fetch('/favoritos', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id_hito: hitoActual.id, id_usuario: usuarioActual })
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    favoritosLocales.delete(String(hitoActual.id));
+                    localStorage.setItem('historiar_favs', JSON.stringify([...favoritosLocales]));
+                    mostrarToast('Eliminado de tus favoritos ❌', 'info');
+                    actualizarBtnFav();
+                    actualizarFavoritos();
+                }
+            } catch (e) {
+                mostrarToast('Error al eliminar de favoritos.', 'info');
             }
-        } catch (e) {
-            mostrarToast('Error al guardar.', 'info');
+        } else {
+            // ─── GUARDAR EN FAVORITOS ───
+            try {
+                const res = await fetch('/guardar-favorito', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id_hito: hitoActual.id, id_usuario: usuarioActual })
+                });
+                const data = await res.json();
+
+                if (data.yaExistia) {
+                    mostrarToast('Ya está en tus favoritos.', 'info');
+                } else {
+                    favoritosLocales.add(String(hitoActual.id));
+                    localStorage.setItem('historiar_favs', JSON.stringify([...favoritosLocales]));
+                    mostrarToast('¡Guardado! "' + hitoActual.titulo + '" en tus favoritos.', 'exito');
+                    actualizarBtnFav();
+                    actualizarFavoritos();
+                }
+            } catch (e) {
+                mostrarToast('Error al guardar.', 'info');
+            }
         }
     });
 
@@ -745,22 +818,42 @@
         });
     });
 
-    function actualizarFavoritos() {
-        const grid     = document.getElementById('favoritos-grid');
+    async function actualizarFavoritos() {
+        const grid = document.getElementById('favoritos-grid');
         const favHitos = todosLosHitos.filter(h => favoritosLocales.has(String(h.id)));
+
         if (favHitos.length === 0) {
             grid.innerHTML = '<p class="fav-vacio">Guardá lugares para verlos acá ⭐</p>';
             return;
         }
+
+        // 1. Dibujamos las tarjetas primero con un "Cargando..." en la imagen
         grid.innerHTML = favHitos.map(h => `
             <div class="fav-card" onclick='abrirPanel(${JSON.stringify(h)})'>
-                <img src="${h.imagen}" alt="${h.titulo}" loading="lazy">
+                <img id="fav-img-${h.id}" src="https://via.placeholder.com/300x150.png?text=Cargando..." alt="${h.titulo}" loading="lazy">
                 <div class="fav-card-body">
                     <div class="fav-card-titulo">${h.titulo}</div>
                     <div class="fav-card-provincia">📍 ${h.provincia}</div>
                 </div>
             </div>
         `).join('');
+
+        // 2. Por cada tarjeta, vamos a buscar la imagen real a tu Backend/Wikipedia
+        for (const h of favHitos) {
+            try {
+                const res = await fetch(`/api/detalle/${h.wiki_titulo}`);
+                const data = await res.json();
+
+                const imgElement = document.getElementById(`fav-img-${h.id}`);
+                if (data.exito && data.imagen) {
+                    imgElement.src = data.imagen;
+                } else {
+                    imgElement.src = "https://via.placeholder.com/300x150.png?text=Sin+imagen";
+                }
+            } catch (error) {
+                console.error("Error cargando imagen de favorito:", error);
+            }
+        }
     }
 
     let toastTimer;
