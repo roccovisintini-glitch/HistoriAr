@@ -593,6 +593,8 @@
         });
         const data = await res.json();
         if (!res.ok) return mostrarError(data.error);
+
+        localStorage.setItem('historiar_token', data.token); // GUARDAMOS EL TOKEN
         iniciarSesion(data.usuario);
     }
 
@@ -607,7 +609,16 @@
         });
         const data = await res.json();
         if (!res.ok) return mostrarError(data.error);
+
+        localStorage.setItem('historiar_token', data.token); // GUARDAMOS EL TOKEN
         iniciarSesion(data.usuario);
+    }
+
+    function cerrarSesion() {
+        localStorage.removeItem('historiar_usuario');
+        localStorage.removeItem('historiar_favs');
+        localStorage.removeItem('historiar_token'); // BORRAMOS EL TOKEN AL SALIR
+        location.reload();
     }
 
     function iniciarSesion(usuario) {
@@ -618,12 +629,6 @@
         document.getElementById('nombre-usuario').textContent = usuario;
         inicializarMapa();
         cargarHitos();
-    }
-
-    function cerrarSesion() {
-        localStorage.removeItem('historiar_usuario');
-        localStorage.removeItem('historiar_favs');
-        location.reload();
     }
 
     // Enter en inputs
@@ -758,16 +763,22 @@
         if (!hitoActual) return;
 
         const esFavorito = favoritosLocales.has(String(hitoActual.id));
+        const token = localStorage.getItem('historiar_token'); // LEEMOS EL TOKEN
+
+        // Cabeceras de seguridad con el Token
+        const headersSeguros = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        };
 
         if (esFavorito) {
             // ─── ELIMINAR DE FAVORITOS ───
             try {
                 const res = await fetch('/favoritos', {
                     method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id_hito: hitoActual.id, id_usuario: usuarioActual })
+                    headers: headersSeguros,
+                    body: JSON.stringify({ id_hito: hitoActual.id }) // Ya no mandamos el usuario, el backend lo sabe por el token!
                 });
-                const data = await res.json();
 
                 if (res.ok) {
                     favoritosLocales.delete(String(hitoActual.id));
@@ -775,31 +786,38 @@
                     mostrarToast('Eliminado de tus favoritos ❌', 'info');
                     actualizarBtnFav();
                     actualizarFavoritos();
+                } else {
+                    const errorData = await res.json();
+                    mostrarToast(errorData.error || 'Error de seguridad', 'info');
                 }
             } catch (e) {
-                mostrarToast('Error al eliminar de favoritos.', 'info');
+                mostrarToast('Error al conectar con el servidor.', 'info');
             }
         } else {
             // ─── GUARDAR EN FAVORITOS ───
             try {
                 const res = await fetch('/guardar-favorito', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id_hito: hitoActual.id, id_usuario: usuarioActual })
+                    headers: headersSeguros,
+                    body: JSON.stringify({ id_hito: hitoActual.id }) // Igual que arriba
                 });
                 const data = await res.json();
 
-                if (data.yaExistia) {
-                    mostrarToast('Ya está en tus favoritos.', 'info');
+                if (res.ok) {
+                    if (!data.yaExistia) {
+                        favoritosLocales.add(String(hitoActual.id));
+                        localStorage.setItem('historiar_favs', JSON.stringify([...favoritosLocales]));
+                        mostrarToast('¡Guardado! "' + hitoActual.titulo + '" en tus favoritos.', 'exito');
+                        actualizarBtnFav();
+                        actualizarFavoritos();
+                    } else {
+                        mostrarToast('Ya está en tus favoritos.', 'info');
+                    }
                 } else {
-                    favoritosLocales.add(String(hitoActual.id));
-                    localStorage.setItem('historiar_favs', JSON.stringify([...favoritosLocales]));
-                    mostrarToast('¡Guardado! "' + hitoActual.titulo + '" en tus favoritos.', 'exito');
-                    actualizarBtnFav();
-                    actualizarFavoritos();
+                    mostrarToast(data.error || 'Sesión expirada. Volvé a ingresar.', 'info');
                 }
             } catch (e) {
-                mostrarToast('Error al guardar.', 'info');
+                mostrarToast('Error al conectar con el servidor.', 'info');
             }
         }
     });

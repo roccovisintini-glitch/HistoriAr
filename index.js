@@ -1,7 +1,10 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
+const jwt = require('jsonwebtoken'); // NUEVO: Importamos la librería JWT
+
 const app = express();
 const port = 3000;
+const SECRET_KEY = 'historiar_secreto_2026'; // NUEVO: Clave secreta para firmar los tokens
 
 const db = new sqlite3.Database('./historiar.db');
 
@@ -94,7 +97,22 @@ const hitos = [
     }
 ];
 
-// ─── AUTH ─────────────────────────────────────────────────────────────────────
+// ─── AUTH & MIDDLEWARE ────────────────────────────────────────────────────────
+
+// Middleware "Patovica": Verifica que la petición tenga un Token válido
+function verificarToken(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) return res.status(403).json({ error: "Acceso denegado. No hay token." });
+
+    // El formato esperado es "Bearer <token>"
+    const token = authHeader.split(' ')[1];
+
+    jwt.verify(token, SECRET_KEY, (err, decodificado) => {
+        if (err) return res.status(401).json({ error: "Token inválido o expirado." });
+        req.usuarioAuth = decodificado.usuario; // Guardamos el usuario real desencriptado
+        next(); // Lo dejamos pasar
+    });
+}
 
 app.post('/registro', (req, res) => {
     const { usuario, password } = req.body;
@@ -106,7 +124,9 @@ app.post('/registro', (req, res) => {
         [usuario.trim(), password],
         (err) => {
             if (err) return res.status(409).json({ error: "Ese nombre de usuario ya existe." });
-            res.json({ ok: true, usuario: usuario.trim() });
+            // Generamos el token seguro
+            const token = jwt.sign({ usuario: usuario.trim() }, SECRET_KEY, { expiresIn: '2h' });
+            res.json({ ok: true, usuario: usuario.trim(), token });
         }
     );
 });
@@ -121,7 +141,9 @@ app.post('/login', (req, res) => {
         (err, row) => {
             if (err) return res.status(500).json({ error: err.message });
             if (!row) return res.status(401).json({ error: "Usuario o contraseña incorrectos." });
-            res.json({ ok: true, usuario: row.usuario });
+            // Generamos el token seguro
+            const token = jwt.sign({ usuario: row.usuario }, SECRET_KEY, { expiresIn: '2h' });
+            res.json({ ok: true, usuario: row.usuario, token });
         }
     );
 });
@@ -169,53 +191,31 @@ app.get('/api/detalle/:wiki_titulo', async (req, res) => {
     }
 });
 
-// ─── FAVORITOS ────────────────────────────────────────────────────────────────
+// ─── FAVORITOS (PROTEGIDOS CON JWT) ───────────────────────────────────────────
 
-app.post('/guardar-favorito', (req, res) => {
-    const { id_hito, id_usuario } = req.body;
-    if (!id_hito || !id_usuario) return res.status(400).json({ error: "Faltan datos." });
+app.post('/guardar-favorito', verificarToken, (req, res) => {
+    const { id_hito } = req.body;
+    const id_usuario = req.usuarioAuth; // ¡Lo sacamos del token seguro!
+    if (!id_hito) return res.status(400).json({ error: "Falta el hito." });
 
-    db.get(
-        `SELECT id FROM favoritos WHERE id_usuario = ? AND id_hito = ?`,
-        [id_usuario, id_hito],
-        (err, row) => {
+    db.get(`SELECT id FROM favoritos WHERE id_usuario = ? AND id_hito = ?`, [id_usuario, id_hito], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (row) return res.json({ mensaje: "Ya está en tus favoritos.", yaExistia: true });
+
+        db.run(`INSERT INTO favoritos (id_usuario, id_hito) VALUES (?, ?)`, [id_usuario, id_hito], (err) => {
             if (err) return res.status(500).json({ error: err.message });
-            if (row) return res.json({ mensaje: "Ya está en tus favoritos.", yaExistia: true });
-
-            db.run(
-                `INSERT INTO favoritos (id_usuario, id_hito) VALUES (?, ?)`,
-                [id_usuario, id_hito],
-                (err) => {
-                    if (err) return res.status(500).json({ error: err.message });
-                    res.json({ mensaje: "¡Guardado en favoritos!", nuevo: true });
-                }
-            );
-        }
-    );
+            res.json({ mensaje: "¡Guardado en favoritos!", nuevo: true });
+        });
+    });
 });
 
-app.get('/favoritos/:usuario', (req, res) => {
-    db.all(
-        `SELECT id_hito FROM favoritos WHERE id_usuario = ?`,
-        [req.params.usuario],
-        (err, rows) => {
-            if (err) return res.status(500).json({ error: err.message });
-            const ids = rows.map(r => r.id_hito);
-            res.json({ status: "success", data: hitos.filter(h => ids.includes(h.id)) });
-        }
-    );
-});
-
-app.delete('/favoritos', (req, res) => {
-    const { id_hito, id_usuario } = req.body;
-    db.run(
-        `DELETE FROM favoritos WHERE id_usuario = ? AND id_hito = ?`,
-        [id_usuario, id_hito],
-        (err) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ mensaje: "Eliminado de favoritos." });
-        }
-    );
+app.delete('/favoritos', verificarToken, (req, res) => {
+    const { id_hito } = req.body;
+    const id_usuario = req.usuarioAuth; // ¡Lo sacamos del token seguro!
+    db.run(`DELETE FROM favoritos WHERE id_usuario = ? AND id_hito = ?`, [id_usuario, id_hito], (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ mensaje: "Eliminado de favoritos." });
+    });
 });
 
 app.listen(port, () => console.log(`✅  HistoriAr en http://localhost:${port}`));
