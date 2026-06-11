@@ -1,29 +1,36 @@
 const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
-const jwt = require('jsonwebtoken'); // NUEVO: Importamos la librería JWT
+const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose'); // Usamos Mongoose para conectarnos a la nube
 
 const app = express();
 const port = 3000;
-const SECRET_KEY = 'historiar_secreto_2026'; // NUEVO: Clave secreta para firmar los tokens
+const SECRET_KEY = 'historiar_secreto_2026';
 
-const db = new sqlite3.Database('./historiar.db');
+// ─── CONEXIÓN A MONGODB ATLAS (CON TU LINK REAL) ──────────────────────────────
+const MONGO_URI = 'mongodb+srv://HistoriArApis:WGiSNvPGr72CONsj@historiar.gdrzfm8.mongodb.net/HistoriAr?appName=HistoriAr';
 
-db.run(`CREATE TABLE IF NOT EXISTS usuarios (
-    id       INTEGER PRIMARY KEY AUTOINCREMENT,
-    usuario  TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL
-)`);
+mongoose.connect(MONGO_URI)
+    .then(() => console.log('☁️  Conectado a MongoDB Atlas con éxito'))
+    .catch(err => console.error('❌ Error conectando a MongoDB:', err));
 
-db.run(`CREATE TABLE IF NOT EXISTS favoritos (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    id_usuario TEXT NOT NULL,
-    id_hito    TEXT NOT NULL,
-    fecha      TEXT DEFAULT (datetime('now'))
-)`);
+// ─── MODELOS DE DATOS (SCHEMAS NOSQL - CLASE 6) ───────────────────────────────
+const usuarioSchema = new mongoose.Schema({
+    usuario: { type: String, required: true, unique: true },
+    password: { type: String, required: true }
+});
+const Usuario = mongoose.model('Usuario', usuarioSchema);
+
+const favoritoSchema = new mongoose.Schema({
+    id_usuario: { type: String, required: true },
+    id_hito: { type: String, required: true },
+    fecha: { type: Date, default: Date.now }
+});
+const Favorito = mongoose.model('Favorito', favoritoSchema);
 
 app.use(express.static('public'));
 app.use(express.json());
 
+// ─── DATOS ESTÁTICOS DE HITOS ─────────────────────────────────────────────────
 const hitos = [
     {
         id: "h1", tipo: "historico", titulo: "Cabildo de Buenos Aires",
@@ -97,125 +104,121 @@ const hitos = [
     }
 ];
 
-// ─── AUTH & MIDDLEWARE ────────────────────────────────────────────────────────
+// ─── AUTH & MIDDLEWARE CON JWT ────────────────────────────────────────────────
 
-// Middleware "Patovica": Verifica que la petición tenga un Token válido
 function verificarToken(req, res, next) {
     const authHeader = req.headers['authorization'];
     if (!authHeader) return res.status(403).json({ error: "Acceso denegado. No hay token." });
 
-    // El formato esperado es "Bearer <token>"
     const token = authHeader.split(' ')[1];
 
     jwt.verify(token, SECRET_KEY, (err, decodificado) => {
         if (err) return res.status(401).json({ error: "Token inválido o expirado." });
-        req.usuarioAuth = decodificado.usuario; // Guardamos el usuario real desencriptado
-        next(); // Lo dejamos pasar
+        req.usuarioAuth = decodificado.usuario;
+        next();
     });
 }
 
-app.post('/registro', (req, res) => {
+app.post('/registro', async (req, res) => {
     const { usuario, password } = req.body;
     if (!usuario || !password) return res.status(400).json({ error: "Completá todos los campos." });
     if (password.length < 4) return res.status(400).json({ error: "La contraseña debe tener al menos 4 caracteres." });
 
-    db.run(
-        `INSERT INTO usuarios (usuario, password) VALUES (?, ?)`,
-        [usuario.trim(), password],
-        (err) => {
-            if (err) return res.status(409).json({ error: "Ese nombre de usuario ya existe." });
-            // Generamos el token seguro
-            const token = jwt.sign({ usuario: usuario.trim() }, SECRET_KEY, { expiresIn: '2h' });
-            res.json({ ok: true, usuario: usuario.trim(), token });
-        }
-    );
+    try {
+        const existe = await Usuario.findOne({ usuario: usuario.trim() });
+        if (existe) return res.status(409).json({ error: "Ese nombre de usuario ya existe." });
+
+        await Usuario.create({ usuario: usuario.trim(), password });
+        const token = jwt.sign({ usuario: usuario.trim() }, SECRET_KEY, { expiresIn: '2h' });
+        res.json({ ok: true, usuario: usuario.trim(), token });
+    } catch (err) {
+        res.status(500).json({ error: "Error interno del servidor al registrarse." });
+    }
 });
 
-app.post('/login', (req, res) => {
+app.post('/login', async (req, res) => {
     const { usuario, password } = req.body;
     if (!usuario || !password) return res.status(400).json({ error: "Completá todos los campos." });
 
-    db.get(
-        `SELECT * FROM usuarios WHERE usuario = ? AND password = ?`,
-        [usuario.trim(), password],
-        (err, row) => {
-            if (err) return res.status(500).json({ error: err.message });
-            if (!row) return res.status(401).json({ error: "Usuario o contraseña incorrectos." });
-            // Generamos el token seguro
-            const token = jwt.sign({ usuario: row.usuario }, SECRET_KEY, { expiresIn: '2h' });
-            res.json({ ok: true, usuario: row.usuario, token });
-        }
-    );
+    try {
+        const user = await Usuario.findOne({ usuario: usuario.trim(), password });
+        if (!user) return res.status(401).json({ error: "Usuario o contraseña incorrectos." });
+
+        const token = jwt.sign({ usuario: user.usuario }, SECRET_KEY, { expiresIn: '2h' });
+        res.json({ ok: true, usuario: user.usuario, token });
+    } catch (err) {
+        res.status(500).json({ error: "Error interno del servidor al iniciar sesión." });
+    }
 });
 
-// ─── HITOS ────────────────────────────────────────────────────────────────────
+// ─── RUTAS DEL MAPA ───────────────────────────────────────────────────────────
 
-// Única ruta principal para pedir los hitos, preparada para filtrar
 app.get('/api/hitos', (req, res) => {
     const { tipo } = req.query;
-
-    // Si viene un tipo en la URL (ej: /api/hitos?tipo=historico), filtramos. Si no, mandamos todos.
     const resultado = tipo ? hitos.filter(h => h.tipo === tipo) : hitos;
-
-    // Devolvemos la respuesta estructurada
-    res.json({
-        status: "success",
-        total: resultado.length,
-        data: resultado
-    });
+    res.json({ status: "success", total: resultado.length, data: resultado });
 });
 
-// ─── INTEGRACIÓN API EXTERNA (WIKIPEDIA) ──────────────────────────────────
 app.get('/api/detalle/:wiki_titulo', async (req, res) => {
     const titulo = req.params.wiki_titulo;
-
     try {
         const wikiResponse = await fetch(`https://es.wikipedia.org/api/rest_v1/page/summary/${titulo}`);
         const wikiData = await wikiResponse.json();
 
         if (wikiResponse.ok) {
             const imagenHD = wikiData.originalimage ? wikiData.originalimage.source : (wikiData.thumbnail ? wikiData.thumbnail.source : null);
-
             res.json({
                 exito: true,
                 descripcion: wikiData.extract,
                 imagen: imagenHD,
-                wiki_url: wikiData.content_urls ? wikiData.content_urls.desktop.page : `https://es.wikipedia.org/wiki/${titulo}` // <-- URL CLAVE
+                wiki_url: wikiData.content_urls ? wikiData.content_urls.desktop.page : `https://es.wikipedia.org/wiki/${titulo}`
             });
         } else {
             res.status(404).json({ exito: false, error: "Información no encontrada en Wikipedia" });
         }
     } catch (error) {
-        console.error("Error al consultar Wikipedia:", error);
         res.status(500).json({ exito: false, error: "Error en el servidor al consultar API externa" });
     }
 });
 
-// ─── FAVORITOS (PROTEGIDOS CON JWT) ───────────────────────────────────────────
+// ─── FAVORITOS (PROTEGIDOS CON JWT Y PERSISTIDOS EN MONGO) ────────────────────
 
-app.post('/guardar-favorito', verificarToken, (req, res) => {
+app.post('/guardar-favorito', verificarToken, async (req, res) => {
     const { id_hito } = req.body;
-    const id_usuario = req.usuarioAuth; // ¡Lo sacamos del token seguro!
+    const id_usuario = req.usuarioAuth;
     if (!id_hito) return res.status(400).json({ error: "Falta el hito." });
 
-    db.get(`SELECT id FROM favoritos WHERE id_usuario = ? AND id_hito = ?`, [id_usuario, id_hito], (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (row) return res.json({ mensaje: "Ya está en tus favoritos.", yaExistia: true });
+    try {
+        const existe = await Favorito.findOne({ id_usuario, id_hito });
+        if (existe) return res.json({ mensaje: "Ya está en tus favoritos.", yaExistia: true });
 
-        db.run(`INSERT INTO favoritos (id_usuario, id_hito) VALUES (?, ?)`, [id_usuario, id_hito], (err) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ mensaje: "¡Guardado en favoritos!", nuevo: true });
-        });
-    });
+        await Favorito.create({ id_usuario, id_hito });
+        res.json({ mensaje: "¡Guardado en favoritos!", nuevo: true });
+    } catch (err) {
+        res.status(500).json({ error: "Error guardando favorito." });
+    }
 });
 
-app.delete('/favoritos', verificarToken, (req, res) => {
+app.get('/favoritos/:usuario', verificarToken, async (req, res) => {
+    try {
+        const favs = await Favorito.find({ id_usuario: req.params.usuario });
+        const ids = favs.map(f => f.id_hito);
+        res.json({ status: "success", data: hitos.filter(h => ids.includes(h.id)) });
+    } catch (err) {
+        res.status(500).json({ error: "Error obteniendo favoritos." });
+    }
+});
+
+app.delete('/favoritos', verificarToken, async (req, res) => {
     const { id_hito } = req.body;
-    const id_usuario = req.usuarioAuth; // ¡Lo sacamos del token seguro!
-    db.run(`DELETE FROM favoritos WHERE id_usuario = ? AND id_hito = ?`, [id_usuario, id_hito], (err) => {
-        if (err) return res.status(500).json({ error: err.message });
+    const id_usuario = req.usuarioAuth;
+
+    try {
+        await Favorito.deleteOne({ id_usuario, id_hito });
         res.json({ mensaje: "Eliminado de favoritos." });
-    });
+    } catch (err) {
+        res.status(500).json({ error: "Error eliminando favorito." });
+    }
 });
 
 app.listen(port, () => console.log(`✅  HistoriAr en http://localhost:${port}`));
