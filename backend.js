@@ -27,7 +27,7 @@ const favoritoSchema = new mongoose.Schema({
 });
 const Favorito = mongoose.model('Favorito', favoritoSchema);
 
-app.use(express.static('public'));
+app.use(express.static('frontend'));
 app.use(express.json());
 
 // ─── DATOS ESTÁTICOS DE HITOS ─────────────────────────────────────────────────
@@ -199,11 +199,18 @@ app.post('/guardar-favorito', verificarToken, async (req, res) => {
     }
 });
 
-app.get('/favoritos/:usuario', verificarToken, async (req, res) => {
+app.get('/favoritos/:usuario', async (req, res) => {
     try {
-        const favs = await Favorito.find({ id_usuario: req.params.usuario });
+        // 1. Buscamos ignorando mayúsculas y minúsculas (para evitar errores si el usuario se guarda distinto en el navegador)
+        const usuarioRegex = new RegExp('^' + req.params.usuario.trim() + '$', 'i');
+        const favs = await Favorito.find({ id_usuario: usuarioRegex });
+
+        // 2. Filtramos los hitos
         const ids = favs.map(f => f.id_hito);
-        res.json({ status: "success", data: hitos.filter(h => ids.includes(h.id)) });
+        const lugaresFavoritos = hitos.filter(h => ids.includes(h.id));
+
+        // 3. Enviamos el Array puro directo al frontend en lugar de un objeto.
+        res.json(lugaresFavoritos);
     } catch (err) {
         res.status(500).json({ error: "Error obteniendo favoritos." });
     }

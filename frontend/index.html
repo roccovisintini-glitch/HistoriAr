@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HistoriAr — Descubrí Argentina</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <link rel="stylesheet" href="style.css">
+
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="pantalla-auth">
+    <div class="auth-card">
+        <div class="auth-logo">Histori<span>Ar</span></div>
+        <p class="auth-subtitulo">🇦🇷 Descubrí Argentina</p>
+        <div class="auth-tabs">
+            <button class="auth-tab activo" id="tab-login" onclick="mostrarTab('login')">Iniciar sesión</button>
+            <button class="auth-tab" id="tab-registro" onclick="mostrarTab('registro')">Registrarse</button>
+        </div>
+        <div id="auth-error" class="auth-error"></div>
+        <div id="form-login">
+            <div class="auth-campo">
+                <label>Usuario</label>
+                <input type="text" id="login-usuario" placeholder="Tu nombre de usuario" autocomplete="username">
+            </div>
+            <div class="auth-campo">
+                <label>Contraseña</label>
+                <input type="password" id="login-password" placeholder="••••••" autocomplete="current-password">
+            </div>
+            <button class="btn-auth" onclick="hacerLogin()">Entrar →</button>
+        </div>
+        <div id="form-registro" style="display:none">
+            <div class="auth-campo">
+                <label>Elegí un usuario</label>
+                <input type="text" id="reg-usuario" autocomplete="username">
+            </div>
+            <div class="auth-campo">
+                <label>Contraseña (mínimo 4 caracteres)</label>
+                <input type="password" id="reg-password" placeholder="••••••" autocomplete="new-password">
+            </div>
+            <button class="btn-auth" onclick="hacerRegistro()">Crear cuenta →</button>
+        </div>
+    </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+    <header>
+        <div class="logo">Histori<span>Ar</span></div>
+        <div class="header-right">
+            <span class="header-usuario">Hola, <strong id="nombre-usuario"></strong></span>
+            <button class="btn-logout" onclick="cerrarSesion()">Salir</button>
+        </div>
+    </header>
+
+    <section class="hero">
+        <h1>El mapa interactivo de <em>nuestra historia</em> y geografía</h1>
+        <p>Hacé clic en cualquier punto del mapa para conocer los lugares más importantes de Argentina.</p>
+        <div class="filtros">
+            <button class="filtro-btn activo" data-filtro="todos">🗺️ Todos</button>
+            <button class="filtro-btn" data-filtro="historico">🏛️ Históricos</button>
+            <button class="filtro-btn" data-filtro="turistico">🌄 Turísticos</button>
+        </div>
+    </section>
+
+    <section class="mapa-container">
+        <div class="seccion-titulo">Mapa interactivo</div>
+        <div id="map"></div>
+    </section>
+
+    <section id="info-panel">
+        <div class="panel-card">
+            <div class="panel-img-wrap">
+                <img id="info-img" src="" alt="">
+                <div class="panel-img-overlay"></div>
+                <div class="panel-img-titulo">
+                    <div class="panel-badge" id="info-badge"></div>
+                    <h2 id="info-titulo"></h2>
+                </div>
+            </div>
+            <div class="panel-body">
+                <div class="panel-grid">
+                    <div>
+                        <p class="panel-desc" id="info-desc"></p>
+                        <div class="panel-actions">
+                            <button class="btn-fav" id="btn-guardar">⭐ Guardar en favoritos</button>
+                            <a id="btn-wiki-link" href="#" target="_blank" class="btn-cerrar" style="text-decoration: none; background: #e0f2fe; color: #0369a1; border-color: #bae6fd;">📖 Leer más en Wikipedia</a>
+                            <button class="btn-cerrar" id="btn-cerrar">✕ Cerrar</button>
+                        </div>
+                    </div>
+                    <div class="panel-lateral">
+                        <div class="info-box dato">
+                            <div class="info-box-label">📌 Dato clave</div>
+                            <p id="info-dato"></p>
+                        </div>
+                        <div class="info-box chicos">
+                            <div class="info-box-label">🎒 Para estudiantes</div>
+                            <p id="info-chicos"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="favoritos-panel">
+        <div class="seccion-titulo">Mis favoritos</div>
+        <div id="favoritos-grid">
+            <p class="fav-vacio">Guardá lugares para verlos acá ⭐</p>
+        </div>
+    </section>
+
+    <footer>
+      — Proyecto universitario APIS, Websockets & Integration - <strong>HistoriAr</strong>
+    </footer>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
