@@ -306,7 +306,7 @@
             </div>
         `).join('');
 
-    // 3. Cargamos las imágenes (esto ya lo tenías bien)
+    // 3. Cargamos las imágenes
     for (const h of favHitos) {
     const resImg = await fetch(`/api/detalle/${h.wiki_titulo}`);
     const dataImg = await resImg.json();
